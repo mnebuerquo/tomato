@@ -1,7 +1,14 @@
 #!/bin/sh
 
-. ./bin/activate
+echo "Activate virtualenv..."
+if [ ! -d "./env" ]; then
+	echo "Creating env..."
+	virtualenv -p python3 "env"
+fi
+# then activate virtualenv
+. "./env/bin/activate"
+echo "Env activated."
 
-pip3 install -r ./requirements.txt
+./env/bin/pip3 install -r ./requirements.txt
 
-python3 tomato.py
+./env/bin/python3 tomato.py
