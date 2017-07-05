@@ -9,23 +9,22 @@ import re
 import gensim
 
 # Load Google's pre-trained Word2Vec model.
+print("Loading word2vec model...")
 model = gensim.models.KeyedVectors.load_word2vec_format('../model/GoogleNews-vectors-negative300.bin', binary=True, limit=500000)
-
-#model = {"movie": list(range(0, 5)), "film": list(range(0, 5)), "series": list(range(1, 6))}
-
-#print(model.doesnt_match("man woman child kitchen".split()))
 
 PAD_INDEX = 0
 UNKNOWN_INDEX = 1
 
-hidden_layer_size = 800
+hidden_layer_size = 400
 learning_rate = 0.001
-iteration_count = 3000
-batch_size = 50
-num_epochs = 10
+iteration_count = 500
+batch_size = 10
+num_epochs = 1
 embedding_size = 300
+num_convs = 32
 
 
+print("Loading training data...")
 train = pd.read_csv("data/train.tsv", header=0, delimiter="\t", quoting=3)
 
 num_phrases = train["PhraseId"].size
@@ -34,6 +33,8 @@ training_sentiment = []
 
 
 # Fast Fola suggested this naming convention
+# this converts a sentiment into a classification vector
+# each sentiment value is an index into the vector
 def hot_vectorize(sentiment):
     one_hot_vector = [0,0,0,0,0]
     one_hot_vector[sentiment-1]=1
@@ -105,9 +106,9 @@ def lookup_word2vec(word):
 
 sentence_input = []
 for sentence in sentences:
-    # numeric_words = list(map(lookup_word, sentence))
-    # numeric_words += [PAD_INDEX] * (sentence_max - len(numeric_words))
+    # convert word list to vector of word2vecs
     numeric_words = list(map(lookup_word2vec, sentence))
+    # pad the vector with zeroes to ensure they are all the same length
     numeric_words += [([0] * embedding_size) for _ in range(0, sentence_max - len(numeric_words))]
     sentence_input.append(numeric_words)
 
@@ -116,16 +117,40 @@ def lookup_index(index):
 
 print("First sentence: ", sentence_input[0])
 
-# images going into input layer (input Layer images)
-# x = tf.placeholder(tf.float32, [None, sentence_max])
-# W = tf.Variable(tf.truncated_normal([sentence_max, hidden_layer_size], stddev=0.1), name="W")
+
+
+def weight_variable(shape):
+  initial = tf.truncated_normal(shape, stddev=0.1)
+  return tf.Variable(initial)
+
+def bias_variable(shape):
+  initial = tf.constant(0.1, shape=shape)
+  return tf.Variable(initial)
+
+def conv2d(x, W):
+  return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
+
+def max_pool_2x2(x):
+  return tf.nn.max_pool(x, ksize=[1, 5, embedding_size, 1],
+                        strides=[1, 1, 1, 1], padding='SAME')
+
+
+W_conv1 = weight_variable([5, embedding_size, 1, num_convs])
+b_conv1 = bias_variable([num_convs])
+
 x = tf.placeholder(tf.float32, [None, sentence_max, embedding_size])
-x_reshaped = tf.reshape(x, [-1, sentence_max * embedding_size])
-W = tf.Variable(tf.truncated_normal([sentence_max * embedding_size, hidden_layer_size], stddev=0.1), name="W")
+
+x_reshaped = tf.reshape(x, [-1,sentence_max,embedding_size,1])
+
+h_conv1 = tf.nn.relu(conv2d(x_reshaped, W_conv1) + b_conv1)
+h_pool1 = max_pool_2x2(h_conv1)
+
+p_reshaped = tf.reshape(h_pool1, [-1, num_convs])
+W = tf.Variable(tf.truncated_normal([num_convs, hidden_layer_size], stddev=0.1), name="W")
 b = tf.Variable(tf.truncated_normal([hidden_layer_size], stddev=0.1), name="b")
 
 # Hidden layer
-h1 = tf.nn.sigmoid(tf.matmul(x_reshaped, W) + b, name = "h1")
+h1 = tf.nn.sigmoid(tf.matmul(p_reshaped, W) + b, name = "h1")
 W_h1 = tf.Variable(tf.truncated_normal([hidden_layer_size, hidden_layer_size], stddev=0.1), name="W_h1")
 b_h1 = tf.Variable(tf.truncated_normal([hidden_layer_size], stddev=0.1), name="b_h1")
 
@@ -172,6 +197,7 @@ for epoch_num in range(0, num_epochs):
 
         # print(sentence_batch[0:2])
 
+        print("sentence data length: ", len(sentence_batch), len(sentiment_batch))
         sess.run(train_step, feed_dict={x: sentence_batch, y_: sentiment_batch})
         print(sess.run(accuracy, feed_dict={x: sentence_batch, y_: sentiment_batch}))
 
