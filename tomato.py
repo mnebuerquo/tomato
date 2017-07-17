@@ -78,6 +78,8 @@ for sentence in sentences:
     for word in sentence:
         counter[word] += 1
 
+sentence_max = 64
+
 print("Sentence max :" + str(sentence_max))
 print("Counter length: " + str(len(counter)))
 print(counter.most_common(10))
@@ -131,8 +133,9 @@ def conv2d(x, W):
   return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
 
 def max_pool_2x2(x):
-  return tf.nn.max_pool(x, ksize=[1, 5, embedding_size, 1],
-                        strides=[1, 1, 1, 1], padding='SAME')
+  return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
+                        strides=[1, 2, 2, 1], padding='SAME')
+
 
 
 W_conv1 = weight_variable([5, embedding_size, 1, num_convs])
@@ -142,24 +145,29 @@ x = tf.placeholder(tf.float32, [None, sentence_max, embedding_size])
 
 x_reshaped = tf.reshape(x, [-1,sentence_max,embedding_size,1])
 
+# output of h_conv1 has shape (none, height (sentence_max), width (embedding_size), channels (num_conv) )
 h_conv1 = tf.nn.relu(conv2d(x_reshaped, W_conv1) + b_conv1)
 h_pool1 = max_pool_2x2(h_conv1)
+# h_pool1 should have dimension (none, sentence_max/2, embedding_size/2, num_convs)
 
-p_reshaped = tf.reshape(h_pool1, [-1, num_convs])
-W = tf.Variable(tf.truncated_normal([num_convs, hidden_layer_size], stddev=0.1), name="W")
+h_pool2 = max_pool_2x2(h_pool1)
+# h_pool1 should have dimension (none, sentence_max/4, embedding_size/4, num_convs)
+
+print("Matrix dimensions: ", sentence_max/4, embedding_size/4, num_convs)
+flat_size = num_convs * int(sentence_max/4) * int(embedding_size/4)
+print("flat_size: ", flat_size)
+
+p_reshaped = tf.reshape(h_pool1, [-1, flat_size ])
+W = tf.Variable(tf.truncated_normal([flat_size, hidden_layer_size], stddev=0.1), name="W")
 b = tf.Variable(tf.truncated_normal([hidden_layer_size], stddev=0.1), name="b")
 
 # Hidden layer
 h1 = tf.nn.sigmoid(tf.matmul(p_reshaped, W) + b, name = "h1")
-W_h1 = tf.Variable(tf.truncated_normal([hidden_layer_size, hidden_layer_size], stddev=0.1), name="W_h1")
-b_h1 = tf.Variable(tf.truncated_normal([hidden_layer_size], stddev=0.1), name="b_h1")
-
-h2 = tf.nn.sigmoid(tf.matmul(h1, W_h1) + b_h1, name = "h2")
-W_h2 = tf.Variable(tf.truncated_normal([hidden_layer_size, 5], stddev=0.1), name="W_h2")
-b_h2 = tf.Variable(tf.truncated_normal([5], stddev=0.1), name="b_h2")
+W_h1 = tf.Variable(tf.truncated_normal([hidden_layer_size, 5], stddev=0.1), name="W_h1")
+b_h1 = tf.Variable(tf.truncated_normal([5], stddev=0.1), name="b_h1")
 
 # Actual output
-y = tf.nn.softmax(tf.matmul(h2, W_h2) + b_h2, name="y")
+y = tf.nn.softmax(tf.matmul(h1, W_h1) + b_h1, name="y")
 
 # Expected output
 y_ = tf.placeholder(tf.float32, [None, 5])
