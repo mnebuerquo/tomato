@@ -157,7 +157,7 @@ print("Matrix dimensions: ", sentence_max/4, embedding_size/4, num_convs)
 flat_size = num_convs * int(sentence_max/4) * int(embedding_size/4)
 print("flat_size: ", flat_size)
 
-p_reshaped = tf.reshape(h_pool1, [-1, flat_size ])
+p_reshaped = tf.reshape(h_pool2, [-1, flat_size ])
 W = tf.Variable(tf.truncated_normal([flat_size, hidden_layer_size], stddev=0.1), name="W")
 b = tf.Variable(tf.truncated_normal([hidden_layer_size], stddev=0.1), name="b")
 
@@ -168,9 +168,13 @@ b_h1 = tf.Variable(tf.truncated_normal([5], stddev=0.1), name="b_h1")
 
 # Actual output
 y = tf.nn.softmax(tf.matmul(h1, W_h1) + b_h1, name="y")
+# after this step, 10x400
 
 # Expected output
 y_ = tf.placeholder(tf.float32, [None, 5])
+
+print("shape of y: ", y.shape)
+print("shape of y_: ", y_.shape)
 
 # Cost function
 cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y), reduction_indices=[1]))
@@ -195,6 +199,7 @@ for epoch_num in range(0, num_epochs):
     for batch_num in range(0, num_batches):
         batch_start_index = batch_num * batch_size
         batch_end_index = min((batch_num + 1) * batch_size, len(training_data))
+        print("batch ", batch_num, "start: ", batch_start_index, "len: ", (batch_end_index - batch_start_index))
         batch = training_data[batch_start_index:batch_end_index]
 
         [sentence_batch, sentiment_batch] = zip(*(batch))
