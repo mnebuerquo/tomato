@@ -15,13 +15,13 @@ model = gensim.models.KeyedVectors.load_word2vec_format('../model/GoogleNews-vec
 PAD_INDEX = 0
 UNKNOWN_INDEX = 1
 
-hidden_layer_size = 400
-learning_rate = 0.001
-iteration_count = 500
-batch_size = 10
+hidden_layer_size = 50
+learning_rate = 0.010
+batch_size = 50
 num_epochs = 1
 embedding_size = 300
-num_convs = 32
+num_convs = 16
+num_convs2 = 10
 
 
 print("Loading training data...")
@@ -61,10 +61,12 @@ last_sentence_id = 0
 for i in range(0, num_phrases):
     sentence_id = train["SentenceId"][i]
     if sentence_id != last_sentence_id:
-        sentence = phrase_to_wordlist(train["Phrase"][i], remove_stopwords=False)
-        sentences.append(sentence.split())
-        last_sentence_id = sentence_id
-        training_sentiment.append(hot_vectorize(int(train["Sentiment"][i])))
+        # remove the neutral sentiments so that training can be faster
+        if int(train["Sentiment"][i]) != 2 :
+            sentence = phrase_to_wordlist(train["Phrase"][i], remove_stopwords=False)
+            sentences.append(sentence.split())
+            last_sentence_id = sentence_id
+            training_sentiment.append(hot_vectorize(int(train["Sentiment"][i])))
 
 
 print(sentences[0:1])
@@ -150,11 +152,15 @@ h_conv1 = tf.nn.relu(conv2d(x_reshaped, W_conv1) + b_conv1)
 h_pool1 = max_pool_2x2(h_conv1)
 # h_pool1 should have dimension (none, sentence_max/2, embedding_size/2, num_convs)
 
-h_pool2 = max_pool_2x2(h_pool1)
-# h_pool1 should have dimension (none, sentence_max/4, embedding_size/4, num_convs)
+W_conv2 = weight_variable([5, int(embedding_size/2), num_convs, num_convs2])
+b_conv2 = bias_variable([num_convs2])
+h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
 
-print("Matrix dimensions: ", sentence_max/4, embedding_size/4, num_convs)
-flat_size = num_convs * int(sentence_max/4) * int(embedding_size/4)
+h_pool2 = max_pool_2x2(h_conv2)
+# h_pool2 should have dimension (none, sentence_max/4, embedding_size/4, num_convs2)
+
+print("Matrix dimensions: ", sentence_max/4, embedding_size/4, num_convs2)
+flat_size = num_convs2 * int(sentence_max/4) * int(embedding_size/4)
 print("flat_size: ", flat_size)
 
 p_reshaped = tf.reshape(h_pool2, [-1, flat_size ])
@@ -168,7 +174,7 @@ b_h1 = tf.Variable(tf.truncated_normal([5], stddev=0.1), name="b_h1")
 
 # Actual output
 y = tf.nn.softmax(tf.matmul(h1, W_h1) + b_h1, name="y")
-# after this step, 10x400
+# after this step, batch_size x 5
 
 # Expected output
 y_ = tf.placeholder(tf.float32, [None, 5])
