@@ -11,7 +11,7 @@ Markdown==2.6.8
 nltk==3.2.4
 numpy==1.13.0
 pandas==0.20.2
-protobuf==3.3.0
+protobuf==3.15.0
 python-dateutil==2.6.0
 pytz==2017.2
 requests==2.18.1
